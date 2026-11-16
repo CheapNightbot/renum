@@ -1,6 +1,7 @@
 import importlib.metadata
 import os
 import sys
+import uuid
 from argparse import ArgumentTypeError
 from collections import Counter
 from pathlib import Path
@@ -78,3 +79,107 @@ def build_rename_plan(files: list[Path], digits: int) -> list[tuple[Path, str]]:
         (file, f"{str(index).zfill(digits)}{file.suffix}")
         for index, file in enumerate(files, 1)
     ]
+
+
+def _path_exists(path: Path) -> bool:
+    """Return True for existing paths, including broken symlinks."""
+
+    return path.exists() or path.is_symlink()
+
+
+def check_destination_collisions(plan: list[tuple[Path, str]]) -> None:
+    """Refuse destinations occupied by files outside this rename plan."""
+
+    sources = {source for source, _ in plan}
+
+    for source, new_name in plan:
+        destination = source.with_name(new_name)
+
+        # A file may keep its current name. Other existing destinations are
+        # okay only when that path is itself a source in this batch.
+        if (
+            _path_exists(destination)
+            and destination != source
+            and destination not in sources
+        ):
+            raise FileExistsError(
+                f"destination `{destination.name}` already exists and "
+                "is not being renamed by this run"
+            )
+
+
+def execute_rename_plan(plan: list[tuple[Path, str]]) -> None:
+    """Rename through temporary paths so planned names can safely overlap."""
+
+    check_destination_collisions(plan)
+
+    # Convert destination names to paths beside their source files. Keeping
+    # temporary and final names in the same directory avoids cross-filesystem
+    # moves and makes each individual rename atomic on typical filesystems.
+    path_plan = [
+        (source, source.with_name(new_name))
+        for source, new_name in plan
+        if source != source.with_name(new_name)
+    ]
+
+    staged: list[tuple[Path, Path]] = []
+    completed: list[tuple[Path, Path]] = []
+
+    try:
+        # First free all the names that this batch will need.
+        for source, _ in path_plan:
+            temporary = source.with_name(f".renum-{uuid.uuid4().hex}.tmp")
+            while _path_exists(temporary):
+                temporary = source.with_name(f".renum-{uuid.uuid4().hex}.tmp")
+
+            source.rename(temporary)
+            staged.append((source, temporary))
+
+        # Then assign the final names.
+        for source, temporary in staged:
+            destination = next(
+                destination
+                for planned_source, destination in path_plan
+                if planned_source == source
+            )
+            temporary.rename(destination)
+            completed.append((temporary, destination))
+
+    except OSError as original_error:
+        # Best effort: move completed files back to their temporary names,
+        # then restore every staged file to its original name.
+        rollback_errors: list[str] = []
+
+        for temporary, destination in reversed(completed):
+            try:
+                if _path_exists(temporary):
+                    raise FileExistsError(f"temporary path `{temporary}` is occupied")
+                destination.rename(temporary)
+            except OSError as error:
+                rollback_errors.append(
+                    f"could not move `{destination.name}` back to "
+                    f"`{temporary.name}`: {error}"
+                )
+
+        for source, temporary in reversed(staged):
+            try:
+                if not _path_exists(temporary):
+                    continue
+                if _path_exists(source):
+                    raise FileExistsError(f"original path `{source}` is occupied")
+                temporary.rename(source)
+            except OSError as error:
+                rollback_errors.append(
+                    f"could not restore `{source.name}` from "
+                    f"`{temporary.name}`: {error}"
+                )
+
+        if rollback_errors:
+            details = "\n".join(f"- {message}" for message in rollback_errors)
+            raise RuntimeError(
+                f"rename failed: {original_error}\n"
+                "Rollback was incomplete; check these paths manually:\n"
+                f"{details}"
+            ) from original_error
+
+        raise

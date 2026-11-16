@@ -6,6 +6,8 @@ from pathlib import Path
 
 from renum.utils import (
     build_rename_plan,
+    check_destination_collisions,
+    execute_rename_plan,
     find_matching_files,
     get_version,
     positive_int_check,
@@ -39,6 +41,12 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(3)
 
     plan = build_rename_plan(files, args.digits)
+
+    try:
+        check_destination_collisions(plan)
+    except FileExistsError as error:
+        print(f"\nError: {error}")
+        sys.exit(5)
 
     print()  # Just for a newline ~
     for file, new_name in plan:
@@ -74,10 +82,17 @@ def main(argv: list[str] | None = None) -> None:
             print("\n> Cancelled. No files were renamed.")
             sys.exit(0)
 
-    # TODO: Replace this direct rename loop with the collision-safe,
-    # two-phase rename implementation.
-    for file, new_name in plan:
-        file.rename(new_name)
+    try:
+        execute_rename_plan(plan)
+    except FileExistsError as error:
+        print(f"\nError: {error}")
+        sys.exit(5)
+    except RuntimeError as error:
+        print(f"\nError: {error}")
+        sys.exit(6)
+    except OSError as error:
+        print(f"\nError while renaming files: {error}")
+        sys.exit(7)
 
     print(
         f"\n> Successfully renamed {len(plan)} file(s) in the following "
