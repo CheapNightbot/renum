@@ -46,15 +46,19 @@ uv run renum --help
 ## Usage
 
 ```text
-renum [DIRECTORY] --ext EXTENSIONS --digits N [--dry-run]
+renum --ext EXTENSIONS --digits N [--dry-run | --assume-yes] [DIRECTORY]
 ```
 
 - `DIRECTORY` is the folder to process. If omitted, `renum` uses the current directory.
 - `--ext` is a comma-separated list of extensions, without leading dots. For example: `jpg,png`.
 - `--digits` sets the minimum number of digits in each number. For example, `--digits 3` numbers files `001`, `002`, `003`, and so on.
 - `--dry-run` shows the planned old and new names without renaming anything.
+- `--assume-yes` skips the confirmation prompt and proceeds with the renames.
 
 Only files directly inside the target directory are considered; subdirectories are not searched. Extension matching is case-sensitive, so `jpg` does not match `.JPG`.
+
+> Without `--dry-run`, `renum` shows the planned renames and asks for confirmation once before doing anything. `--assume-yes` skips that confirmation.
+
 
 <details>
   <summary>Show examples</summary>
@@ -89,7 +93,7 @@ If the preview looks right, run the command again without `--dry-run`:
 renum --ext "jpg,png" --digits 3 ~/Pictures
 ```
 
-The files are then named:
+After you confirm, the files are named:
 
 ```text
 001.png

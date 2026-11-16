@@ -1,6 +1,6 @@
 [project]
 name = "renum"
-version = "0.1.0"
+version = "0.2.0"
 description = "Batch-rename files in a directory to sequential, zero-padded numbers"
 readme = "README.md"
 license = "MIT"

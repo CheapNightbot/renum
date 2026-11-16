@@ -55,13 +55,14 @@ def main(argv: list[str] | None = None) -> None:
         )
         sys.exit(3)
 
-    print()  # Just for a newline ~
-    for idx, file in enumerate(files, 1):
-        new_name = f"{str(idx).zfill(args.digits) + file.suffix}"
-        print(f"{file.name:32}\t -> \t{new_name}")
+    plan = [
+        (file, f"{str(idx).zfill(args.digits)}{file.suffix}")
+        for idx, file in enumerate(files, 1)
+    ]
 
-        if not args.dry_run:
-            file.rename(new_name)
+    print()  # Just for a newline ~
+    for file, new_name in plan:
+        print(f"{file.name:32}\t -> \t{new_name}")
 
     # Some stats, why not !?
     print(f"\n{'-' * 32}\n")
@@ -72,11 +73,34 @@ def main(argv: list[str] | None = None) -> None:
         print(
             "\n> No files were renamed, because you ran command with `--dry-run` flag."
         )
-    else:
-        print(
-            f"\n> Successfully renamed {len(files)} file(s) in the following directory:\n{directory.absolute()}"
-        )
+        sys.exit(0)
 
+    if not args.assume_yes:
+        try:
+            answer = (
+                input(f"\nRename {len(plan)} file(s) in {directory}? [y/N] ")
+                .strip()
+                .casefold()
+            )
+        except EOFError:
+            print(
+                "\nError: confirmation required. Use `--assume-yes` to skip the prompt."
+            )
+            sys.exit(4)
+        except KeyboardInterrupt:
+            answer = "absolutely no! 🙂"
+
+        if answer not in {"y", "yes"}:
+            print("\n> Cancelled. No files were renamed.")
+            sys.exit(0)
+
+    for file, new_name in plan:
+        file.rename(new_name)
+
+    print(
+        f"\n> Successfully renamed {len(plan)} file(s) in the following directory:\n"
+        f"{directory}"
+    )
     sys.exit(0)
 
 
@@ -93,6 +117,8 @@ def build_parser() -> argparse.ArgumentParser:
         """),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+
+    group = parser.add_mutually_exclusive_group()
 
     # Optional, placed at top to show right after help option.
     parser.add_argument(
@@ -122,16 +148,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--digits",
+        metavar="N",
         type=positive_int_check,
         required=True,
         help="Number of digits for the counter (zero-padded)",
     )
 
     # Optional arguments
-    parser.add_argument(
+    group.add_argument(
         "--dry-run",
         action="store_true",
         help="Show what would happen without touching anything",
+    )
+
+    group.add_argument(
+        "--assume-yes",
+        action="store_true",
+        help="Rename files without asking for confirmation",
     )
 
     return parser
