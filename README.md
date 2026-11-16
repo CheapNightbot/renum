@@ -10,3 +10,8 @@ It's just a niche project ~
     <summary>I swear me have a life!</summary>
     <img src="renum whiteboard.svg" alt="renum whiteboard" />
 </details>
+
+## Install
+
+- **pipx**: `pipx install git+https://github.com/CheapNightbot/renum`
+- **uv**: `uv tool install git+https://github.com/CheapNightbot/renum`
