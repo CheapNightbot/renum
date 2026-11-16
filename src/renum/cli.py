@@ -2,10 +2,15 @@ import argparse
 import os
 import sys
 import textwrap
-from collections import Counter
 from pathlib import Path
 
-from renum.utils import get_version, permission_check, positive_int_check
+from renum.utils import (
+    build_rename_plan,
+    find_matching_files,
+    get_version,
+    positive_int_check,
+    validate_directory,
+)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -16,49 +21,24 @@ def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    # Use absolute path, otherwise iterdir will fail as after changing to this
-    # directory it will look relative to this directory for this directory !? www
+    # Use an absolute path so it remains valid after changing into the directory.
     directory = Path(args.dir).absolute()
-    if not directory.exists() or not directory.is_dir():
-        print(f"Error: `{args.dir}` does not exist or is not a directory.")
-        sys.exit(1)
+    validate_directory(directory, args.dir)
 
-    # For these checks, me aware of TOCTOU (and using try/except).
-    # But the reason for doing this is, to make sure we don't modify
-    # files and half-way-through hit such errors. Which can leave some
-    # files changed and rest unchanged. We only want to rename when
-    # everything is safe and we can rename all the matching files.
-    if not permission_check(directory):
-        print(f"Error: read/write permissions error on `{args.dir}` directory.")
-        sys.exit(2)
-
-    # Renaming file (Path.rename) was moving file to the directory from where
-    # the command ran. There might be a better solution than this.
+    # `Path.rename()` below uses relative destination names, so change into the
+    # target directory to ensure files are renamed there, not in the caller's
+    # working directory.
     os.chdir(directory)
 
-    files: list[Path] = []
-    counts = Counter(dict.fromkeys(args.ext, 0))
-    for item in sorted(directory.iterdir(), key=lambda file: file.name.casefold()):
-        if not item.is_file() or item.suffix.removeprefix(".") not in args.ext:
-            continue
-
-        if not permission_check(item):
-            print(f"Error: read/write permissions error on `{item}` file.")
-            sys.exit(2)
-
-        files.append(item)
-        counts[item.suffix.removeprefix(".")] += 1
-
-    if len(files) == 0:
+    files, counts = find_matching_files(directory, args.ext)
+    if not files:
         print(
-            f"There were no files in `{args.dir}` directory matching extension(s): {args.ext}"
+            f"There were no files in `{args.dir}` directory "
+            f"matching extension(s): {args.ext}"
         )
         sys.exit(3)
 
-    plan = [
-        (file, f"{str(idx).zfill(args.digits)}{file.suffix}")
-        for idx, file in enumerate(files, 1)
-    ]
+    plan = build_rename_plan(files, args.digits)
 
     print()  # Just for a newline ~
     for file, new_name in plan:
@@ -94,12 +74,14 @@ def main(argv: list[str] | None = None) -> None:
             print("\n> Cancelled. No files were renamed.")
             sys.exit(0)
 
+    # TODO: Replace this direct rename loop with the collision-safe,
+    # two-phase rename implementation.
     for file, new_name in plan:
         file.rename(new_name)
 
     print(
-        f"\n> Successfully renamed {len(plan)} file(s) in the following directory:\n"
-        f"{directory}"
+        f"\n> Successfully renamed {len(plan)} file(s) in the following "
+        f"directory:\n{directory}"
     )
     sys.exit(0)
 
