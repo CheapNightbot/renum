@@ -1,0 +1,18 @@
+[project]
+name = "renum"
+version = "0.1.0"
+description = "Batch-rename files in a directory to sequential, zero-padded numbers"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "ポテト ^. .^₎ฅ", email = "151442433+CheapNightbot@users.noreply.github.com" }
+]
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+renum = "renum.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
