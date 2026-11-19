@@ -140,7 +140,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="EXTENSIONS",
         required=True,
         type=lambda ext: ext.strip(",").split(","),
-        help="Comma-separated list of extensions to include",
+        help="Comma-separated list of extensions to include. Use '*' for all files.",
     )
 
     parser.add_argument(

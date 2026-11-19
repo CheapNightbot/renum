@@ -53,13 +53,17 @@ def find_matching_files(
     """Collect matching files in case-insensitive alphabetical order."""
 
     files: list[Path] = []
-    counts = Counter(dict.fromkeys(extensions, 0))
+    counts = (
+        Counter(dict.fromkeys(extensions, 0)) if extensions[0] != "*" else Counter()
+    )
 
     # Keep the preflight permission check so obvious permission problems are
     # found before starting the rename loop. It cannot eliminate race conditions
     # if permissions or files change after this check.
     for item in sorted(directory.iterdir(), key=lambda file: file.name.casefold()):
-        if not item.is_file() or item.suffix.removeprefix(".") not in extensions:
+        if not item.is_file() or (
+            extensions[0] != "*" and item.suffix.removeprefix(".") not in extensions
+        ):
             continue
 
         if not permission_check(item):
